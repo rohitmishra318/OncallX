@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --workspaces --include-workspace-root
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://dummy:dummy@localhost:5432/dummy
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+        env:
+          JWT_ACCESS_SECRET: ci_access_secret_at_least_32_chars!!
+          JWT_REFRESH_SECRET: ci_refresh_secret_at_least_32_chars!
+          DATABASE_URL: postgresql://oncallx:oncallx@localhost:5432/oncallx
+          REDIS_URL: redis://localhost:6379

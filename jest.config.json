@@ -1,0 +1,26 @@
+{
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "roots": ["<rootDir>/apps/api/src", "<rootDir>/apps/worker/src"],
+  "testMatch": ["**/__tests__/**/*.test.ts"],
+  "moduleNameMapper": {
+    "^@oncallx/shared$": "<rootDir>/packages/shared/src/index.ts",
+    "^@oncallx/shared/(.*)$": "<rootDir>/packages/shared/src/$1"
+  },
+  "transform": {
+    "^.+\\.tsx?$": ["ts-jest", {
+      "tsconfig": {
+        "module": "commonjs",
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "strict": false,
+        "rootDir": ".",
+        "baseUrl": ".",
+        "paths": {
+          "@oncallx/shared": ["packages/shared/src/index.ts"]
+        }
+      }
+    }]
+  },
+  "setupFiles": ["<rootDir>/jest.setup.ts"]
+}

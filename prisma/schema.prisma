@@ -1,0 +1,111 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  teamId       String
+  role         Role
+  createdAt    DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id])
+}
+
+enum Role {
+  ADMIN
+  RESPONDER
+  VIEWER
+}
+
+model Team {
+  id              String    @id @default(uuid())
+  name            String
+  slackWebhookUrl String?
+  services        Service[]
+  users           User[]
+}
+
+model Service {
+  id                 String  @id @default(uuid())
+  name               String
+  teamId             String
+  apiKey             String  @unique @default(uuid())
+  escalationPolicyId String?
+
+  team             Team              @relation(fields: [teamId], references: [id])
+  escalationPolicy EscalationPolicy?
+}
+
+model EscalationPolicy {
+  id               String  @id @default(uuid())
+  serviceId        String  @unique
+  primaryUserId    String
+  fallbackUserId   String
+  escalateAfterMin Int     @default(5)
+
+  service Service @relation(fields: [serviceId], references: [id])
+}
+
+model Incident {
+  id         String         @id @default(uuid())
+  serviceId  String
+  dedupKey   String
+  status     IncidentStatus @default(OPEN)
+  severity   Severity
+  title      String         @default("")
+  createdAt  DateTime       @default(now())
+  ackedAt    DateTime?
+  ackedById  String?
+  resolvedAt DateTime?
+
+  events        IncidentEvent[]
+  notifications Notification[]
+
+  @@index([serviceId, dedupKey, status])
+}
+
+enum IncidentStatus {
+  OPEN
+  ACKED
+  RESOLVED
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model IncidentEvent {
+  id         String   @id @default(uuid())
+  incidentId String
+  eventType  String // e.g. "created", "acked", "escalated", "resolved", "duplicate_alert"
+  actorId    String?
+  createdAt  DateTime @default(now())
+  metadata   Json?
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+}
+
+model Notification {
+  id           String   @id @default(uuid())
+  incidentId   String
+  channel      String // "email" | "slack"  — kept as plain string for Phase 2 extensibility
+  status       String // "pending" | "sent" | "failed"
+  attemptCount Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+}
