@@ -101,7 +101,7 @@ alertsRouter.post('/', requireApiKey, async (req: Request, res: Response): Promi
   await escalationQueue.add(
     'escalate-check',
     { incidentId: newIncident.id, serviceId: service.id } satisfies EscalateCheckJobData,
-    { delay: delayMs, jobId: `escalate:${newIncident.id}` }
+    { delay: delayMs, jobId: `escalate-${newIncident.id}` }
   );
 
   // Create Notification records and enqueue send-notification jobs (email always, slack if configured)
@@ -127,7 +127,7 @@ alertsRouter.post('/', requireApiKey, async (req: Request, res: Response): Promi
         teamId: team.id,
       } satisfies SendNotificationJobData,
       // Each channel job is independent — no grouping — so a failing Slack job never blocks email
-      { jobId: `notify:${notification.id}` }
+      { jobId: `notify-${notification.id}` }
     );
   }
 
