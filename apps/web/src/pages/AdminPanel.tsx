@@ -38,7 +38,7 @@ export default function AdminPanel() {
     setServiceMsg('');
     try {
       const { data } = await api.post('/services', { name: serviceName, teamId });
-      setServiceMsg(`✅ Service created! API Key: ${data.apiKey}`);
+      setServiceMsg(`✅ Service created! ID: ${data.id} | API Key: ${data.apiKey}`);
       setServiceName('');
     } catch {
       setServiceMsg('❌ Failed to create service');

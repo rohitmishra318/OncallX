@@ -29,6 +29,7 @@ export default function LoginPage() {
     <div className="login-wrap">
       <div className="login-box">
         <h1>OnCallX</h1>
+        <p className="subtitle">Sign in to manage your incidents</p>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="email">Email</label>

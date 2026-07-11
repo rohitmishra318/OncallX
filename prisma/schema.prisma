@@ -45,6 +45,7 @@ model Service {
 
   team             Team              @relation(fields: [teamId], references: [id])
   escalationPolicy EscalationPolicy?
+  incidents        Incident[]
 }
 
 model EscalationPolicy {
@@ -69,6 +70,7 @@ model Incident {
   ackedById  String?
   resolvedAt DateTime?
 
+  service       Service         @relation(fields: [serviceId], references: [id])
   events        IncidentEvent[]
   notifications Notification[]
 

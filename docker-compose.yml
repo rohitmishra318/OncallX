@@ -58,12 +58,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./apps/api:/app/apps/api
-      - ./packages/shared:/app/packages/shared
-      - ./prisma:/app/prisma
-      - /app/node_modules
-      - /app/apps/api/node_modules
+
 
   worker:
     build:

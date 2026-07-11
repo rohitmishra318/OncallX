@@ -1,6 +1,8 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 
+RUN apk add --no-cache openssl
+
 # Copy workspace manifests
 COPY package.json ./
 COPY packages/shared/package.json ./packages/shared/

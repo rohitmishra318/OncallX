@@ -8,7 +8,7 @@ import { REFRESH_TOKEN_PREFIX } from '@oncallx/shared';
 
 export const authRouter = Router();
 
-const ACCESS_TOKEN_EXPIRY = '15m';
+const ACCESS_TOKEN_EXPIRY = '1h';
 const REFRESH_TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
 function signAccessToken(userId: string, teamId: string, role: string): string {
