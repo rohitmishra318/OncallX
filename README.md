@@ -218,3 +218,180 @@ Connect with `socket.io-client` to `VITE_WS_URL` with `path: '/ws'` and `auth: {
 | `incident:created` | server → client | `{ incident, serviceName }` |
 | `incident:updated` | server → client | `{ incident }` |
 | `incident:escalated` | server → client | `{ incidentId, fallbackUserId }` |
+
+---
+
+# OnCallX System Architecture
+
+This document provides detailed Mermaid diagrams illustrating the architecture, data flow, and core workflows of the OnCallX incident management system.
+
+## 1. High-Level Architecture
+This diagram outlines the major components of the system, their interactions, and the underlying infrastructure (PostgreSQL, Redis, BullMQ).
+
+```mermaid
+flowchart TD
+    subgraph External["External Systems"]
+        Monitoring["Monitoring Tools\n(Prometheus, Datadog)"]
+        Slack["Slack Workspace"]
+        Mailhog["Mailhog / SMTP Server"]
+    end
+
+    subgraph Frontend["React Web App (Vite + TS)"]
+        UI["UI / Incident Board"]
+        API_Client["Axios API Client"]
+        WS_Client["Socket.IO Client"]
+    end
+
+    subgraph Backend["Backend Services (Node.js)"]
+        API["Express API Server\n(Port 4000)"]
+        Worker["BullMQ Background Worker\n(Notification & Escalation)"]
+    end
+
+    subgraph Infrastructure["Data Layer"]
+        PG[(PostgreSQL\nDatabase)]
+        Redis[(Redis\nCache & Message Queue)]
+    end
+
+    %% External to Backend
+    Monitoring -- "POST /alerts (API Key)" --> API
+    Worker -- "POST Webhook" --> Slack
+    Worker -- "SMTP" --> Mailhog
+
+    %% Frontend to Backend
+    UI --> API_Client
+    UI --> WS_Client
+    API_Client -- "REST (JWT Auth)" --> API
+    WS_Client -- "WebSockets" --> API
+
+    %% Backend to Infrastructure
+    API -- "Prisma ORM (Read/Write)" --> PG
+    Worker -- "Prisma ORM (Read/Write)" --> PG
+    
+    API -- "Publish Jobs & Caching" --> Redis
+    Redis -- "Consume Jobs" --> Worker
+    
+    API -- "Publish Events" --> Redis
+    Redis -- "Subscribe Events" --> API
+```
+
+---
+
+## 2. Alert Processing & Incident Creation Workflow
+This sequence diagram shows exactly what happens when a monitoring system triggers an alert, including deduplication and asynchronous job scheduling.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Monitor as Monitoring Tool
+    participant API as Express API
+    participant Redis as Redis (Dedup Guard)
+    participant DB as PostgreSQL
+    participant Queue as BullMQ (Redis)
+    participant WS as Socket.IO (Frontend)
+
+    Monitor->>API: POST /alerts (dedupKey, severity) + API Key
+    
+    API->>DB: Fetch Service & Escalation Policy
+    
+    API->>Redis: SET NX EX (dedupKey block lock)
+    alt Lock acquired (New Incident)
+        API->>DB: Create Incident (Status: OPEN)
+        API->>DB: Create IncidentEvent (created)
+        
+        API->>Queue: Enqueue 'escalate-check' (Delayed 5m)
+        API->>DB: Create Notification records (pending)
+        API->>Queue: Enqueue 'send-notification' (Email)
+        API->>Queue: Enqueue 'send-notification' (Slack)
+        
+        API->>WS: Emit 'incident:created' to Team Room
+        API-->>Monitor: 201 Created (Incident ID)
+    else Lock failed (Concurrent Duplicate)
+        API-->>Monitor: 200 OK (Duplicate Ignored)
+    else Exists in DB (Existing Open Incident)
+        API->>DB: Check if Incident is OPEN/ACKED
+        API->>DB: Append 'duplicate_alert' IncidentEvent
+        API-->>Monitor: 200 OK (Incident Updated)
+    end
+```
+
+---
+
+## 3. Escalation & Background Worker Flow
+This flowchart details how the `worker` container processes background jobs, handles failures, and enforces escalation policies when an incident goes unacknowledged.
+
+```mermaid
+flowchart TD
+    Start((New Job in Redis)) --> JobType{Job Type?}
+    
+    %% Send Notification Flow
+    JobType -- "send-notification" --> FetchData[Fetch Incident & User Data]
+    FetchData --> Channel{Channel?}
+    Channel -- "email" --> SendEmail[Send via Nodemailer]
+    Channel -- "slack" --> SendSlack[Axios POST to Slack Webhook]
+    
+    SendEmail --> Success{Success?}
+    SendSlack --> Success
+    
+    Success -- "Yes" --> MarkSent[Update DB: Notification sent]
+    Success -- "No" --> MarkFailed[Update DB: Notification failed]
+    MarkFailed --> Retry[BullMQ Exponential Backoff Retry]
+    
+    %% Escalate Check Flow
+    JobType -- "escalate-check" --> CheckStatus[Check Incident Status in DB]
+    CheckStatus --> IsResolved{Is OPEN?}
+    
+    IsResolved -- "No (ACKED/RESOLVED)" --> End((Job Finished silently))
+    IsResolved -- "Yes (Still OPEN)" --> GetFallback[Get Fallback Responder from Policy]
+    GetFallback --> CreateNotif[Create new Notifications for Fallback]
+    CreateNotif --> Enqueue[Enqueue new 'send-notification' jobs]
+    Enqueue --> AppendEvent[Append 'escalated' IncidentEvent]
+    AppendEvent --> WSEmit[Emit 'incident:escalated' to Frontend]
+```
+
+---
+
+## 4. Database Schema (Entity Relationship Diagram)
+A high-level view of how the tables in PostgreSQL are related to one another.
+
+```mermaid
+erDiagram
+    TEAM ||--o{ USER : contains
+    TEAM ||--o{ SERVICE : owns
+    SERVICE ||--o| ESCALATION_POLICY : has
+    SERVICE ||--o{ INCIDENT : generates
+    USER ||--o{ INCIDENT : "acks/resolves"
+    
+    INCIDENT ||--o{ INCIDENT_EVENT : logs
+    INCIDENT ||--o{ NOTIFICATION : triggers
+
+    TEAM {
+        uuid id PK
+        string name
+        string slackWebhookUrl
+    }
+    USER {
+        uuid id PK
+        string email
+        string role "ADMIN/RESPONDER"
+        uuid teamId FK
+    }
+    SERVICE {
+        uuid id PK
+        string name
+        uuid apiKey
+        uuid teamId FK
+    }
+    ESCALATION_POLICY {
+        uuid id PK
+        uuid primaryUserId FK
+        uuid fallbackUserId FK
+        int escalateAfterMin
+    }
+    INCIDENT {
+        uuid id PK
+        string dedupKey
+        string status "OPEN/ACKED/RESOLVED"
+        string severity
+        uuid serviceId FK
+    }
+```
