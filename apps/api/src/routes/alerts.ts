@@ -139,3 +139,49 @@ alertsRouter.post('/', requireApiKey, async (req: Request, res: Response): Promi
 
   res.status(201).json({ incidentId: newIncident.id });
 });
+
+// POST /alerts/resolve — auto-resolve via API key (for synthetic monitors / external tools)
+const resolveSchema = z.object({
+  dedupKey: z.string().min(1).max(255),
+});
+
+alertsRouter.post('/resolve', requireApiKey, async (req: Request, res: Response): Promise<void> => {
+  const parsed = resolveSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+  const { dedupKey } = parsed.data;
+  const service = req.service!;
+
+  const incident = await prisma.incident.findFirst({
+    where: { serviceId: service.id, dedupKey, status: { in: ['OPEN', 'ACKED'] } },
+  });
+
+  if (!incident) {
+    res.status(404).json({ error: 'No open incident found for this dedupKey' });
+    return;
+  }
+
+  const updated = await prisma.incident.update({
+    where: { id: incident.id },
+    data: { status: 'RESOLVED', resolvedAt: new Date() },
+  });
+
+  await prisma.incidentEvent.create({
+    data: {
+      incidentId: incident.id,
+      eventType: 'resolved',
+      metadata: { source: 'synthetic-monitor-auto-resolve', dedupKey },
+    },
+  });
+
+  // Clear Redis dedup key so a fresh alert can fire a new incident
+  const team = await prisma.team.findUnique({ where: { id: service.teamId } });
+  const redisKey = `${DEDUP_KEY_PREFIX}${service.id}:${dedupKey}`;
+  await redis.del(redisKey);
+
+  emitToTeam(service.teamId, 'incident:updated', { incident: updated });
+
+  res.json({ message: 'Incident resolved', incidentId: incident.id });
+});

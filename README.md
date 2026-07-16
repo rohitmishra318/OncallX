@@ -395,3 +395,96 @@ erDiagram
         uuid serviceId FK
     }
 ```
+
+---
+
+## Synthetic Monitor (`apps/monitor`)
+
+The `apps/monitor` app is a standalone Node.js/TypeScript process that watches external services and fires real alerts into OnCallX when they go down — replacing the need to fire manual `curl` commands. It communicates exclusively through the `POST /alerts` API (same as any external monitoring tool would), and **never touches Postgres or Redis directly**.
+
+### How it works
+
+- Polls each configured target's health endpoint every `intervalMs` milliseconds.
+- Tracks consecutive failures and successes **in memory** per target.
+- **Does NOT alert on the first failure** — only when `consecutiveFailures >= failureThreshold` (default: 3). This avoids false alarms from transient network blips.
+- On threshold breach → fires `POST /alerts` to OnCallX, creating an incident visible live on the dashboard.
+- On recovery (`consecutiveSuccesses >= successThreshold`) → calls `POST /alerts/resolve` to auto-resolve the incident and update the event timeline.
+
+### Setup
+
+**1. Add a `/health` endpoint to your deployed project** (if it doesn't have one):
+
+```javascript
+// In your Express app (e.g., Rental Property backend)
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+```
+
+Make sure Nginx proxies `/health` to your Node process (it should already if you have a catch-all `location /` block).
+
+**2. Create a Service in OnCallX** (Admin Panel → "Create Service") and copy the **API Key**.
+
+**3. Configure targets:**
+
+```bash
+cd apps/monitor
+cp targets.example.json targets.json
+# Edit targets.json — set your real URL, thresholds, and apiKeyEnvVar name
+```
+
+Example `targets.json`:
+```json
+[
+  {
+    "name": "rental-api",
+    "url": "https://your-domain.com/health",
+    "expectedStatus": 200,
+    "timeoutMs": 5000,
+    "intervalMs": 30000,
+    "failureThreshold": 3,
+    "successThreshold": 2,
+    "apiKeyEnvVar": "MONITOR_TARGET_1_API_KEY"
+  }
+]
+```
+
+> ⚠️ `targets.json` is gitignored. API keys must come from environment variables — never hardcode them in `targets.json`.
+
+**4. Set environment variables:**
+
+```bash
+export ONCALLX_API_URL=http://localhost:4000    # or your deployed OnCallX URL
+export MONITOR_TARGET_1_API_KEY=<your-service-api-key>
+```
+
+**5. Run the monitor:**
+
+```bash
+# Development
+cd apps/monitor
+npm install
+npm run dev
+
+# Production with pm2
+pm2 start npm --name oncallx-monitor -- run start --prefix apps/monitor
+
+# Production with Docker
+docker build -t oncallx-monitor apps/monitor/
+docker run -d \
+  -e ONCALLX_API_URL=http://your-oncallx-server:4000 \
+  -e MONITOR_TARGET_1_API_KEY=your_api_key \
+  -v $(pwd)/apps/monitor/targets.json:/app/targets.json:ro \
+  --name oncallx-monitor \
+  oncallx-monitor
+```
+
+### Where to run it
+
+> **Important:** Run the monitor on infrastructure **separate from the service it's monitoring**. If the monitored server goes down completely, you don't want the monitoring process to die with it. Ideal locations: alongside your OnCallX server, a cheap VPS, or as a scheduled GitHub Actions workflow.
+
+### New API endpoint added
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | /alerts/resolve | X-Api-Key | Auto-resolve open incident by `dedupKey` (for monitors on recovery) |

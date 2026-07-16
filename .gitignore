@@ -5,3 +5,4 @@ dist/
 *.env.example
 *spec.md
 *architecture.md
+apps/monitor/targets.json

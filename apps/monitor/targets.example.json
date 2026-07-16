@@ -1,0 +1,22 @@
+[
+  {
+    "name": "my-portfolio-site",
+    "url": "https://your-domain.com/health",
+    "expectedStatus": 200,
+    "timeoutMs": 5000,
+    "intervalMs": 30000,
+    "failureThreshold": 3,
+    "successThreshold": 2,
+    "apiKeyEnvVar": "MONITOR_TARGET_1_API_KEY"
+  },
+  {
+    "name": "rental-api",
+    "url": "https://api.your-domain.com/health",
+    "expectedStatus": 200,
+    "timeoutMs": 5000,
+    "intervalMs": 30000,
+    "failureThreshold": 3,
+    "successThreshold": 2,
+    "apiKeyEnvVar": "MONITOR_TARGET_2_API_KEY"
+  }
+]
