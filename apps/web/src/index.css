@@ -1,6 +1,8 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* OnCallX — minimal functional styles */
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 14px;
