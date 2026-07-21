@@ -46,6 +46,20 @@ alertsRouter.post('/', requireApiKey, async (req: Request, res: Response): Promi
   const dedupTtlSeconds = policy.escalateAfterMin * 2 * 60;
   const redisKey = `${DEDUP_KEY_PREFIX}${service.id}:${dedupKey}`;
 
+  // §16.7 — Suppress alert creation if there is an active MaintenanceWindow for this dedupKey
+  const now = new Date();
+  const activeMaintenance = await prisma.maintenanceWindow.findFirst({
+    where: {
+      targetId: dedupKey, // dedupKey = target name = targetId in MaintenanceWindow
+      startsAt: { lte: now },
+      endsAt: { gt: now },
+    },
+  });
+  if (activeMaintenance) {
+    res.status(200).json({ message: 'Suppressed — active maintenance window', windowId: activeMaintenance.id });
+    return;
+  }
+
   // Atomic dedup check + incident creation guard using SET NX EX
   // This is the race-condition guard: only the first concurrent request with the same
   // dedupKey will get "OK" from Redis; all others get null → treated as duplicate.

@@ -7,6 +7,9 @@ export type {
   Incident,
   IncidentEvent,
   Notification,
+  CheckResult,
+  CheckResultHourly,
+  MaintenanceWindow,
   Role,
   IncidentStatus,
   Severity,
@@ -14,6 +17,6 @@ export type {
 
 export { prisma } from './prismaClient';
 export { redis } from './redisClient';
-export { notificationQueue, escalationQueue, QUEUE_NAMES } from './queues';
-export type { EscalateCheckJobData, SendNotificationJobData } from './jobTypes';
+export { notificationQueue, escalationQueue, retentionQueue, QUEUE_NAMES } from './queues';
+export type { EscalateCheckJobData, SendNotificationJobData, RollupJobData, PruneJobData } from './jobTypes';
 export { DEDUP_KEY_PREFIX, REFRESH_TOKEN_PREFIX } from './constants';

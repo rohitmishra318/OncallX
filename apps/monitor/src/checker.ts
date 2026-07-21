@@ -1,9 +1,12 @@
 import axios from 'axios';
+import https from 'https';
+import tls from 'tls';
 import type { TargetConfig, TargetState, CheckResult } from './types';
 
 const ONCALLX_API_URL = process.env.ONCALLX_API_URL ?? 'http://localhost:4000';
+const DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS = 14;
 
-// ─── HTTP check ──────────────────────────────────────────────────────────────
+// ─── HTTP check ───────────────────────────────────────────────────────────────
 
 export async function checkTarget(target: TargetConfig): Promise<CheckResult> {
   const start = Date.now();
@@ -21,6 +24,35 @@ export async function checkTarget(target: TargetConfig): Promise<CheckResult> {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, statusCode: null, latencyMs, error: message };
   }
+}
+
+// ─── SSL certificate expiry check ─────────────────────────────────────────────
+
+async function getSslExpiryDays(hostname: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const socket = tls.connect(
+      { host: hostname, port: 443, servername: hostname },
+      () => {
+        const cert = socket.getPeerCertificate();
+        socket.destroy();
+        if (!cert || !cert.valid_to) {
+          resolve(null);
+          return;
+        }
+        const expiresAt = new Date(cert.valid_to);
+        const daysLeft = Math.floor((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        resolve(daysLeft);
+      }
+    );
+    socket.on('error', () => {
+      socket.destroy();
+      resolve(null);
+    });
+    socket.setTimeout(5000, () => {
+      socket.destroy();
+      resolve(null);
+    });
+  });
 }
 
 // ─── OnCallX integration ──────────────────────────────────────────────────────
@@ -64,6 +96,80 @@ async function autoResolve(target: TargetConfig, apiKey: string): Promise<void> 
   }
 }
 
+// ─── CheckResult logging (fire-and-forget) ────────────────────────────────────
+
+function logCheckResult(target: TargetConfig, apiKey: string, result: CheckResult): void {
+  // Intentionally fire-and-forget — a logging failure must never affect alert logic
+  axios
+    .post(
+      `${ONCALLX_API_URL}/monitoring/check-results`,
+      {
+        targetId: target.name,
+        success: result.success,
+        statusCode: result.statusCode,
+        latencyMs: result.latencyMs,
+      },
+      {
+        headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+        timeout: 5000,
+      }
+    )
+    .catch((err) => {
+      console.debug(`[monitor] check-result log failed for ${target.name}: ${err.message}`);
+    });
+}
+
+// ─── SSL expiry check ─────────────────────────────────────────────────────────
+
+async function checkSslExpiry(
+  target: TargetConfig,
+  apiKey: string,
+  state: TargetState,
+  timestamp: string
+): Promise<void> {
+  if (!target.url.startsWith('https://')) return;
+
+  const thresholdDays = target.sslExpiryThresholdDays ?? DEFAULT_SSL_EXPIRY_THRESHOLD_DAYS;
+  if (thresholdDays <= 0) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (state.lastSslAlertDate === today) return; // Already alerted today
+
+  const hostname = new URL(target.url).hostname;
+  const daysLeft = await getSslExpiryDays(hostname);
+
+  if (daysLeft === null) {
+    console.debug(`[${timestamp}] [DEBUG] ${target.name}: could not inspect SSL certificate`);
+    return;
+  }
+
+  console.debug(`[${timestamp}] [DEBUG] ${target.name}: SSL cert expires in ${daysLeft} days`);
+
+  if (daysLeft <= thresholdDays) {
+    console.info(
+      `[${timestamp}] [INFO ] ${target.name}: SSL cert expires in ${daysLeft} days — firing MEDIUM alert`
+    );
+    try {
+      await axios.post(
+        `${ONCALLX_API_URL}/alerts`,
+        {
+          dedupKey: `${target.name}-ssl-expiry`, // Distinct from uptime dedupKey
+          severity: 'MEDIUM',
+          title: `${target.name}: SSL certificate expires in ${daysLeft} day(s)`,
+        },
+        {
+          headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+          timeout: 10000,
+        }
+      );
+      state.lastSslAlertDate = today; // Rate-limit to once per day
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[monitor] Failed to fire SSL expiry alert for ${target.name}: ${message}`);
+    }
+  }
+}
+
 // ─── State machine tick ───────────────────────────────────────────────────────
 
 /**
@@ -77,6 +183,14 @@ export async function processTick(
   state: TargetState
 ): Promise<void> {
   const timestamp = new Date().toISOString();
+
+  // §16.3 — Log every single check to CheckResult (additive, fire-and-forget)
+  logCheckResult(target, apiKey, result);
+
+  // §16.8 — SSL expiry check (HTTPS targets only, rate-limited to once/day)
+  checkSslExpiry(target, apiKey, state, timestamp).catch((err) => {
+    console.debug(`[monitor] SSL check error for ${target.name}: ${err.message}`);
+  });
 
   if (result.success) {
     // ── Healthy check ────────────────────────────────────────────────────────

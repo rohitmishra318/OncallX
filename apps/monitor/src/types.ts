@@ -20,6 +20,17 @@ export interface TargetConfig {
   successThreshold: number;
   /** Name of the env var that holds the OnCallX service API key */
   apiKeyEnvVar: string;
+  /**
+   * Days before SSL certificate expiry to fire a MEDIUM alert.
+   * Default: 14. Set to 0 to disable SSL expiry checks.
+   */
+  sslExpiryThresholdDays?: number;
+  /**
+   * Latency (ms) above which the target is considered "Degraded" on the public
+   * status page, even if it returns the expected HTTP status code.
+   * Required — there is no hardcoded default.
+   */
+  degradedLatencyMs?: number;
 }
 
 /** Per-target runtime state — held in memory only */
@@ -30,6 +41,8 @@ export interface TargetState {
   isDown: boolean;
   /** The OnCallX incidentId from the most recent alert (for auto-resolve) */
   openIncidentId: string | null;
+  /** ISO date string (YYYY-MM-DD) of the last SSL expiry alert, to rate-limit to once/day */
+  lastSslAlertDate: string | null;
 }
 
 export interface CheckResult {

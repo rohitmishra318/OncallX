@@ -32,8 +32,44 @@ model Team {
   id              String    @id @default(uuid())
   name            String
   slackWebhookUrl String?
+  publicSlug      String?   @unique
   services        Service[]
   users           User[]
+}
+
+model CheckResult {
+  id         String   @id @default(uuid())
+  targetId   String   // maps to target.name in apps/monitor/targets.json
+  timestamp  DateTime @default(now())
+  success    Boolean
+  statusCode Int?
+  latencyMs  Int?
+
+  @@index([targetId, timestamp])
+}
+
+model CheckResultHourly {
+  id            String   @id @default(uuid())
+  targetId      String
+  hourBucket    DateTime // truncated to the hour (e.g. 2024-01-15T14:00:00Z)
+  uptimePercent Float
+  avgLatencyMs  Float
+  p95LatencyMs  Float
+  totalChecks   Int
+  failedChecks  Int
+
+  @@unique([targetId, hourBucket])
+  @@index([targetId, hourBucket])
+}
+
+model MaintenanceWindow {
+  id          String   @id @default(uuid())
+  targetId    String
+  startsAt    DateTime
+  endsAt      DateTime
+  reason      String?
+  createdById String
+  createdAt   DateTime @default(now())
 }
 
 model Service {

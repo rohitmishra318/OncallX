@@ -5,6 +5,8 @@ import { alertsRouter } from './routes/alerts';
 import { incidentsRouter } from './routes/incidents';
 import { servicesRouter } from './routes/services';
 import { teamsRouter } from './routes/teams';
+import { monitoringRouter } from './routes/monitoring';
+import { statusRouter } from './routes/status';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -18,6 +20,8 @@ app.use('/alerts', alertsRouter);
 app.use('/incidents', incidentsRouter);
 app.use('/services', servicesRouter);
 app.use('/teams', teamsRouter);
+app.use('/monitoring', monitoringRouter);
+app.use('/status', statusRouter); // Public — no auth
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));

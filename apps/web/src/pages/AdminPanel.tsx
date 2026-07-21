@@ -4,12 +4,14 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
 interface TeamUser { id: string; name: string; email: string; role: string; }
+interface MaintenanceWindow { id: string; targetId: string; startsAt: string; endsAt: string; reason: string | null; }
 
 export default function AdminPanel() {
   const { role, teamId } = useAuth();
   const navigate = useNavigate();
 
   const [users, setUsers] = useState<TeamUser[]>([]);
+  const [windows, setWindows] = useState<MaintenanceWindow[]>([]);
 
   // Create service form
   const [serviceName, setServiceName] = useState('');
@@ -26,12 +28,24 @@ export default function AdminPanel() {
   const [slackUrl, setSlackUrl] = useState('');
   const [slackMsg, setSlackMsg] = useState('');
 
+  // Maintenance window form
+  const [mwTargetId, setMwTargetId] = useState('');
+  const [mwStartsAt, setMwStartsAt] = useState('');
+  const [mwEndsAt, setMwEndsAt] = useState('');
+  const [mwReason, setMwReason] = useState('');
+  const [mwMsg, setMwMsg] = useState('');
+
   useEffect(() => {
     if (role !== 'ADMIN') { navigate('/incidents'); return; }
     if (!teamId) return;
 
     api.get(`/teams/${teamId}/users`).then(({ data }) => setUsers(data));
+    fetchWindows();
   }, [role, teamId, navigate]);
+
+  const fetchWindows = () => {
+    api.get('/monitoring/maintenance').then(({ data }) => setWindows(data.windows)).catch(console.error);
+  };
 
   async function createService(e: React.FormEvent) {
     e.preventDefault();
@@ -68,6 +82,37 @@ export default function AdminPanel() {
       setSlackMsg('✅ Slack webhook saved');
     } catch {
       setSlackMsg('❌ Failed to set Slack webhook');
+    }
+  }
+
+  async function createMaintenanceWindow(e: React.FormEvent) {
+    e.preventDefault();
+    setMwMsg('');
+    try {
+      await api.post('/monitoring/maintenance', {
+        targetId: mwTargetId,
+        startsAt: new Date(mwStartsAt).toISOString(),
+        endsAt: new Date(mwEndsAt).toISOString(),
+        reason: mwReason || undefined,
+      });
+      setMwMsg('✅ Maintenance window scheduled');
+      setMwTargetId('');
+      setMwStartsAt('');
+      setMwEndsAt('');
+      setMwReason('');
+      fetchWindows();
+    } catch {
+      setMwMsg('❌ Failed to schedule maintenance window');
+    }
+  }
+
+  async function deleteWindow(id: string) {
+    if (!confirm('Are you sure you want to cancel this window?')) return;
+    try {
+      await api.delete(`/monitoring/maintenance/${id}`);
+      fetchWindows();
+    } catch {
+      alert('Failed to delete window');
     }
   }
 
@@ -127,6 +172,52 @@ export default function AdminPanel() {
           <button type="submit" className="primary">Save Webhook</button>
           {slackMsg && <p style={{ marginTop: 8 }}>{slackMsg}</p>}
         </form>
+      </div>
+
+      <div className="card">
+        <h2>Schedule Maintenance Window</h2>
+        <form onSubmit={createMaintenanceWindow}>
+          <div className="form-group">
+            <label htmlFor="mw-target">Target Name (dedupKey)</label>
+            <input id="mw-target" value={mwTargetId} onChange={e => setMwTargetId(e.target.value)} required />
+          </div>
+          <div className="form-group">
+            <label htmlFor="mw-start">Starts At (Local Time)</label>
+            <input id="mw-start" type="datetime-local" value={mwStartsAt} onChange={e => setMwStartsAt(e.target.value)} required />
+          </div>
+          <div className="form-group">
+            <label htmlFor="mw-end">Ends At (Local Time)</label>
+            <input id="mw-end" type="datetime-local" value={mwEndsAt} onChange={e => setMwEndsAt(e.target.value)} required />
+          </div>
+          <div className="form-group">
+            <label htmlFor="mw-reason">Reason (optional)</label>
+            <input id="mw-reason" value={mwReason} onChange={e => setMwReason(e.target.value)} />
+          </div>
+          <button type="submit" className="primary">Schedule Window</button>
+          {mwMsg && <p style={{ marginTop: 8 }}>{mwMsg}</p>}
+        </form>
+
+        {windows.length > 0 && (
+          <div style={{ marginTop: 24 }}>
+            <h3>Active & Upcoming Windows</h3>
+            <table>
+              <thead>
+                <tr><th>Target</th><th>Starts</th><th>Ends</th><th>Reason</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {windows.map(w => (
+                  <tr key={w.id}>
+                    <td>{w.targetId}</td>
+                    <td>{new Date(w.startsAt).toLocaleString()}</td>
+                    <td>{new Date(w.endsAt).toLocaleString()}</td>
+                    <td>{w.reason || '-'}</td>
+                    <td><button onClick={() => deleteWindow(w.id)} style={{ padding: '4px 8px', fontSize: 12 }}>Cancel</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="card">

@@ -7,7 +7,9 @@
     "intervalMs": 30000,
     "failureThreshold": 3,
     "successThreshold": 2,
-    "apiKeyEnvVar": "MONITOR_TARGET_1_API_KEY"
+    "apiKeyEnvVar": "MONITOR_TARGET_1_API_KEY",
+    "degradedLatencyMs": 2000,
+    "sslExpiryThresholdDays": 14
   },
   {
     "name": "rental-api",
@@ -17,6 +19,8 @@
     "intervalMs": 30000,
     "failureThreshold": 3,
     "successThreshold": 2,
-    "apiKeyEnvVar": "MONITOR_TARGET_2_API_KEY"
+    "apiKeyEnvVar": "MONITOR_TARGET_2_API_KEY",
+    "degradedLatencyMs": 2000,
+    "sslExpiryThresholdDays": 14
   }
 ]

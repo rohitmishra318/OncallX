@@ -47,6 +47,7 @@ for (const { config } of targets) {
     consecutiveSuccesses: 0,
     isDown: false,
     openIncidentId: null,
+    lastSslAlertDate: null,
   });
 }
 
