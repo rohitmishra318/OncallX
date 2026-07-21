@@ -50,3 +50,21 @@ teamsRouter.get('/:id/users', async (req: Request, res: Response): Promise<void>
 
   res.json(users);
 });
+
+// GET /teams/:id/services — any authenticated user (own team only)
+// Used by the MonitoringDashboard target-creation form to populate the service selector.
+teamsRouter.get('/:id/services', async (req: Request, res: Response): Promise<void> => {
+  if (req.params.id !== req.user!.teamId) {
+    res.status(403).json({ error: 'Access denied' });
+    return;
+  }
+
+  const services = await prisma.service.findMany({
+    where: { teamId: req.params.id },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+
+  res.json(services);
+});
+

@@ -10,6 +10,7 @@ export type {
   CheckResult,
   CheckResultHourly,
   MaintenanceWindow,
+  MonitorTarget,
   Role,
   IncidentStatus,
   Severity,
@@ -20,3 +21,5 @@ export { redis } from './redisClient';
 export { notificationQueue, escalationQueue, retentionQueue, QUEUE_NAMES } from './queues';
 export type { EscalateCheckJobData, SendNotificationJobData, RollupJobData, PruneJobData } from './jobTypes';
 export { DEDUP_KEY_PREFIX, REFRESH_TOKEN_PREFIX } from './constants';
+export { isUrlSafeToFetch } from './ssrf';
+

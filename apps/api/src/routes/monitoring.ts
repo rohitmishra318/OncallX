@@ -1,12 +1,15 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 import { z } from 'zod';
-import { prisma } from '@oncallx/shared';
+import { prisma, isUrlSafeToFetch } from '@oncallx/shared';
 import { requireApiKey } from '../middleware/apiKey';
 import { requireAuth, requireRole } from '../middleware/auth';
+import { requireInternalKey } from '../middleware/internalKey';
 
 export const monitoringRouter = Router();
 
-// ─── POST /monitoring/check-results (API-key auth — for apps/monitor) ────────
+// ─── POST /monitoring/check-results (API-key auth — legacy, apps/monitor Phase 16) ──
 const checkResultSchema = z.object({
   targetId: z.string().min(1).max(255),
   success: z.boolean(),
@@ -33,7 +36,7 @@ monitoringRouter.post(
   }
 );
 
-// ─── GET /monitoring/targets (JWT auth — internal dashboard) ──────────────────
+// ─── GET /monitoring/targets (JWT auth — monitoring dashboard read) ───────────
 monitoringRouter.get(
   '/targets',
   requireAuth,
@@ -44,21 +47,17 @@ monitoringRouter.get(
     const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const since90d = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
-    // Get all distinct targets that have sent check results to this team's services
-    // (targetId is the monitor target name, scoped by service API key)
     const distinctTargets = await prisma.checkResult.groupBy({
       by: ['targetId'],
     });
 
     const targets = await Promise.all(
       distinctTargets.map(async ({ targetId }) => {
-        // Most recent check for current status + latency
         const latest = await prisma.checkResult.findFirst({
           where: { targetId },
           orderBy: { timestamp: 'desc' },
         });
 
-        // Uptime percentages from hourly rollups
         const computeUptime = async (since: Date) => {
           const rows = await prisma.checkResultHourly.findMany({
             where: { targetId, hourBucket: { gte: since } },
@@ -69,14 +68,6 @@ monitoringRouter.get(
           return total > 0 ? ((total - failed) / total) * 100 : null;
         };
 
-        // 90-day uptime strip: one entry per day
-        const uptimeStrip = await prisma.checkResultHourly.groupBy({
-          by: ['targetId'],
-          where: { targetId, hourBucket: { gte: since90d } },
-          // We need day-level grouping — done in application code below
-        });
-
-        // Day-level grouping for the strip
         const hourlyRows = await prisma.checkResultHourly.findMany({
           where: { targetId, hourBucket: { gte: since90d } },
           orderBy: { hourBucket: 'asc' },
@@ -117,7 +108,7 @@ monitoringRouter.get(
   }
 );
 
-// ─── GET /monitoring/targets/:targetId/history (JWT auth) ────────────────────
+// ─── GET /monitoring/targets/:targetId/history (JWT auth) ─────────────────────
 monitoringRouter.get(
   '/targets/:targetId/history',
   requireAuth,
@@ -138,12 +129,11 @@ monitoringRouter.get(
       case '90d':
         since = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
         break;
-      default: // 24h — use raw CheckResult rows at full resolution
+      default:
         since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     }
 
     if (range === '24h') {
-      // Raw resolution
       const rows = await prisma.checkResult.findMany({
         where: { targetId, timestamp: { gte: since } },
         orderBy: { timestamp: 'asc' },
@@ -151,18 +141,24 @@ monitoringRouter.get(
       });
       res.json({ range, resolution: 'raw', data: rows });
     } else {
-      // Hourly rollup resolution
       const rows = await prisma.checkResultHourly.findMany({
         where: { targetId, hourBucket: { gte: since } },
         orderBy: { hourBucket: 'asc' },
-        select: { hourBucket: true, uptimePercent: true, avgLatencyMs: true, p95LatencyMs: true, totalChecks: true, failedChecks: true },
+        select: {
+          hourBucket: true,
+          uptimePercent: true,
+          avgLatencyMs: true,
+          p95LatencyMs: true,
+          totalChecks: true,
+          failedChecks: true,
+        },
       });
       res.json({ range, resolution: 'hourly', data: rows });
     }
   }
 );
 
-// ─── Maintenance Windows (JWT + ADMIN) ───────────────────────────────────────
+// ─── Maintenance Windows (JWT + ADMIN) ────────────────────────────────────────
 const maintenanceSchema = z.object({
   targetId: z.string().min(1),
   startsAt: z.string().datetime(),
@@ -200,7 +196,6 @@ monitoringRouter.get(
   requireAuth,
   async (req: Request, res: Response): Promise<void> => {
     const now = new Date();
-    // Return active + future windows
     const windows = await prisma.maintenanceWindow.findMany({
       where: { endsAt: { gte: now } },
       orderBy: { startsAt: 'asc' },
@@ -223,5 +218,241 @@ monitoringRouter.delete(
     }
     await prisma.maintenanceWindow.delete({ where: { id: req.params.id } });
     res.json({ message: 'Maintenance window deleted' });
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 3: User-managed MonitorTarget CRUD
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_TARGETS_PER_USER = parseInt(process.env.MAX_TARGETS_PER_USER ?? '5', 10);
+const MIN_INTERVAL_MS = 30_000;
+const MAX_TIMEOUT_MS = 10_000;
+const BCRYPT_ROUNDS = 10;
+
+const createTargetSchema = z.object({
+  name: z.string().min(1).max(100),
+  url: z.string().url(),
+  serviceId: z.string().uuid(),
+  expectedStatus: z.number().int().min(100).max(599).default(200),
+  timeoutMs: z.number().int().min(1000).max(MAX_TIMEOUT_MS).default(5000),
+  intervalMs: z.number().int().min(MIN_INTERVAL_MS).default(60_000),
+  failureThreshold: z.number().int().min(1).max(20).default(3),
+  successThreshold: z.number().int().min(1).max(20).default(2),
+  degradedLatencyMs: z.number().int().min(100).default(2000),
+});
+
+// POST /monitoring/user-targets — create a new monitored target for the current user
+monitoringRouter.post(
+  '/user-targets',
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const parsed = createTargetSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+
+    const {
+      name,
+      url,
+      serviceId,
+      expectedStatus,
+      timeoutMs,
+      intervalMs,
+      failureThreshold,
+      successThreshold,
+      degradedLatencyMs,
+    } = parsed.data;
+    const userId = req.user!.userId;
+    const teamId = req.user!.teamId;
+
+    // §17.6 — Enforce max-targets limit
+    const existing = await prisma.monitorTarget.count({ where: { userId } });
+    if (existing >= MAX_TARGETS_PER_USER) {
+      res.status(422).json({
+        error: `Target limit reached (max ${MAX_TARGETS_PER_USER} per user). Deactivate or delete an existing target first.`,
+      });
+      return;
+    }
+
+    // Verify the referenced service belongs to the user's team
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
+    if (!service || service.teamId !== teamId) {
+      res.status(404).json({ error: 'Service not found or does not belong to your team' });
+      return;
+    }
+
+    // §17.4 — SSRF check at creation time
+    const safe = await isUrlSafeToFetch(url);
+    if (!safe) {
+      res.status(422).json({
+        error:
+          'URL failed security validation. Only public HTTPS URLs are allowed. Private IPs, loopback addresses, and metadata endpoints are blocked.',
+      });
+      return;
+    }
+
+    // Generate the raw API key — shown once, then only the hash is stored
+    const rawKey = crypto.randomBytes(32).toString('hex');
+    const apiKeyHash = await bcrypt.hash(rawKey, BCRYPT_ROUNDS);
+
+    const target = await prisma.monitorTarget.create({
+      data: {
+        userId,
+        serviceId,
+        name,
+        url,
+        expectedStatus,
+        timeoutMs,
+        intervalMs,
+        failureThreshold,
+        successThreshold,
+        degradedLatencyMs,
+        apiKeyHash,
+        isActive: true,
+      },
+    });
+
+    // Return the raw key exactly once — it is never retrievable again
+    res.status(201).json({
+      target: {
+        id: target.id,
+        name: target.name,
+        url: target.url,
+        serviceId: target.serviceId,
+        isActive: target.isActive,
+        createdAt: target.createdAt,
+      },
+      // ⚠️  This is the ONLY time this key will be shown.
+      apiKey: rawKey,
+    });
+  }
+);
+
+// GET /monitoring/user-targets — list the current user's own targets (no apiKeyHash)
+monitoringRouter.get(
+  '/user-targets',
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const userId = req.user!.userId;
+    const targets = await prisma.monitorTarget.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        serviceId: true,
+        expectedStatus: true,
+        timeoutMs: true,
+        intervalMs: true,
+        failureThreshold: true,
+        successThreshold: true,
+        degradedLatencyMs: true,
+        isActive: true,
+        createdAt: true,
+        // apiKeyHash is deliberately excluded
+      },
+    });
+    res.json({ targets });
+  }
+);
+
+// PATCH /monitoring/user-targets/:id — update config or toggle isActive (owner only)
+const patchTargetSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  expectedStatus: z.number().int().min(100).max(599).optional(),
+  timeoutMs: z.number().int().min(1000).max(MAX_TIMEOUT_MS).optional(),
+  intervalMs: z.number().int().min(MIN_INTERVAL_MS).optional(),
+  failureThreshold: z.number().int().min(1).max(20).optional(),
+  successThreshold: z.number().int().min(1).max(20).optional(),
+  degradedLatencyMs: z.number().int().min(100).optional(),
+  isActive: z.boolean().optional(),
+});
+
+monitoringRouter.patch(
+  '/user-targets/:id',
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const userId = req.user!.userId;
+    const { id } = req.params;
+
+    const target = await prisma.monitorTarget.findUnique({ where: { id } });
+    if (!target || target.userId !== userId) {
+      res.status(404).json({ error: 'Target not found' });
+      return;
+    }
+
+    const parsed = patchTargetSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+
+    const updated = await prisma.monitorTarget.update({
+      where: { id },
+      data: parsed.data,
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        serviceId: true,
+        expectedStatus: true,
+        timeoutMs: true,
+        intervalMs: true,
+        failureThreshold: true,
+        successThreshold: true,
+        degradedLatencyMs: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    res.json({ target: updated });
+  }
+);
+
+// DELETE /monitoring/user-targets/:id — delete a target (owner only)
+monitoringRouter.delete(
+  '/user-targets/:id',
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const userId = req.user!.userId;
+    const { id } = req.params;
+
+    const target = await prisma.monitorTarget.findUnique({ where: { id } });
+    if (!target || target.userId !== userId) {
+      res.status(404).json({ error: 'Target not found' });
+      return;
+    }
+
+    await prisma.monitorTarget.delete({ where: { id } });
+    res.json({ message: 'Target deleted' });
+  }
+);
+
+// GET /monitoring/targets/active — INTERNAL_MONITOR_KEY auth only
+// Returns the full list of active targets consumed by apps/monitor
+monitoringRouter.get(
+  '/targets/active',
+  requireInternalKey,
+  async (_req: Request, res: Response): Promise<void> => {
+    const targets = await prisma.monitorTarget.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        serviceId: true,
+        expectedStatus: true,
+        timeoutMs: true,
+        intervalMs: true,
+        failureThreshold: true,
+        successThreshold: true,
+        degradedLatencyMs: true,
+      },
+    });
+    res.json({ targets });
   }
 );

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import api from '../api';
+import { useAuth } from '../context/AuthContext';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface TargetStatus {
   targetId: string;
@@ -17,9 +20,28 @@ interface TargetHistory {
   data: any[];
 }
 
-// ─── Signature element: a live heartbeat waveform used as the status indicator.
-// "up" plays a looping cardiac-style blip; "down" renders a flat line. This is a
-// literal read of "is this service alive" rather than a decorative pulse dot.
+interface UserTarget {
+  id: string;
+  name: string;
+  url: string;
+  serviceId: string;
+  expectedStatus: number;
+  timeoutMs: number;
+  intervalMs: number;
+  failureThreshold: number;
+  successThreshold: number;
+  degradedLatencyMs: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+interface Service {
+  id: string;
+  name: string;
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────────
+
 function Heartbeat({ status, size = 'md' }: { status: 'up' | 'down' | 'unknown'; size?: 'sm' | 'md' }) {
   const h = size === 'sm' ? 20 : 28;
   const color = status === 'up' ? '#22D3A5' : status === 'down' ? '#FB4B4B' : '#7C8BA3';
@@ -78,6 +100,322 @@ function relativeTime(iso: string | null) {
   if (mins < 60) return `${mins}m ago`;
   return `${Math.floor(mins / 60)}h ago`;
 }
+
+// ─── API Key Reveal Modal ─────────────────────────────────────────────────────
+
+function ApiKeyRevealModal({ apiKey, onClose }: { apiKey: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(apiKey).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="w-full max-w-lg mx-4 bg-[#0B0F17] border border-[#1E2938] rounded-xl p-7 shadow-2xl">
+        <div className="flex items-center gap-3 mb-1">
+          <span className="text-2xl">🔑</span>
+          <h2 className="text-lg font-bold text-[#F5F8FF]">Save Your API Key</h2>
+        </div>
+        <p className="text-[#FB4B4B] text-xs font-mono mt-2 mb-5 bg-[#FB4B4B]/10 border border-[#FB4B4B]/20 rounded px-3 py-2">
+          ⚠️ This key will NOT be shown again. Copy it now and store it securely.
+        </p>
+
+        <div className="flex items-center gap-2 mb-6">
+          <code className="flex-1 font-mono text-sm bg-[#080B11] border border-[#1A2230] rounded px-3 py-2.5 text-[#4C8DFF] break-all select-all">
+            {apiKey}
+          </code>
+          <button
+            onClick={copy}
+            className={`shrink-0 px-4 py-2.5 rounded text-xs font-mono font-bold tracking-wide transition-all ${copied
+              ? 'bg-[#22D3A5]/20 text-[#22D3A5] border border-[#22D3A5]/30'
+              : 'bg-[#4C8DFF]/10 text-[#4C8DFF] border border-[#4C8DFF]/30 hover:bg-[#4C8DFF]/20'
+              }`}
+          >
+            {copied ? 'COPIED!' : 'COPY'}
+          </button>
+        </div>
+
+        <p className="text-xs text-[#7C8BA3] font-mono mb-5">
+          This key lets external tools (e.g. UptimeRobot, DigitalOcean) POST alerts to OnCallX on behalf of this target's service. The built-in monitor doesn't use it — it authenticates internally.
+        </p>
+
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 rounded text-sm font-mono font-semibold bg-[#1A2230] text-[#EAF0FA] hover:bg-[#2A3546] transition-colors"
+        >
+          I've saved it — close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Target Modal ─────────────────────────────────────────────────────────
+
+function AddTargetModal({
+  services,
+  onCreated,
+  onClose,
+}: {
+  services: Service[];
+  onCreated: (apiKey: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const [serviceId, setServiceId] = useState('');
+  const [expectedStatus, setExpectedStatus] = useState('200');
+  const [intervalMs, setIntervalMs] = useState('60000');
+  const [timeoutMs, setTimeoutMs] = useState('5000');
+  const [failureThreshold, setFailureThreshold] = useState('3');
+  const [successThreshold, setSuccessThreshold] = useState('2');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const { data } = await api.post('/monitoring/user-targets', {
+        name,
+        url,
+        serviceId,
+        expectedStatus: parseInt(expectedStatus, 10),
+        intervalMs: parseInt(intervalMs, 10),
+        timeoutMs: parseInt(timeoutMs, 10),
+        failureThreshold: parseInt(failureThreshold, 10),
+        successThreshold: parseInt(successThreshold, 10),
+        degradedLatencyMs: 2000,
+      });
+      onCreated(data.apiKey);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? 'Failed to create target';
+      setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const inputCls =
+    'w-full bg-[#080B11] border border-[#1A2230] text-[#EAF0FA] text-sm font-mono rounded px-3 py-2 outline-none focus:border-[#4C8DFF]/50 placeholder-[#3A4658]';
+  const labelCls = 'block text-[10px] font-mono uppercase tracking-widest text-[#7C8BA3] mb-1';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="w-full max-w-lg mx-4 bg-[#0B0F17] border border-[#1E2938] rounded-xl p-7 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold text-[#F5F8FF]">Add Monitor Target</h2>
+          <button onClick={onClose} className="text-[#7C8BA3] hover:text-[#EAF0FA] text-xl leading-none">✕</button>
+        </div>
+
+        {services.length === 0 && (
+          <div className="mb-5 px-3 py-3 bg-[#FBBF24]/10 border border-[#FBBF24]/30 rounded text-xs font-mono text-[#FBBF24]">
+            ⚠️ You have no Services yet. Go to the Admin Panel to create one with an escalation policy first.
+          </div>
+        )}
+
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className={labelCls}>Target Name</label>
+            <input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="my-production-api" required />
+          </div>
+          <div>
+            <label className={labelCls}>URL to monitor</label>
+            <input className={inputCls} type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://your-app.com/health" required />
+            <p className="text-[10px] font-mono text-[#3A4658] mt-1">Must be public HTTPS. Private IPs and metadata endpoints are blocked.</p>
+          </div>
+          <div>
+            <label className={labelCls}>Service (incidents route here)</label>
+            <select
+              className={inputCls}
+              value={serviceId}
+              onChange={e => setServiceId(e.target.value)}
+              required
+            >
+              <option value="">— Select a service —</option>
+              {services.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Expected Status</label>
+              <input className={inputCls} type="number" value={expectedStatus} onChange={e => setExpectedStatus(e.target.value)} min={100} max={599} required />
+            </div>
+            <div>
+              <label className={labelCls}>Interval (ms, min 30000)</label>
+              <input className={inputCls} type="number" value={intervalMs} onChange={e => setIntervalMs(e.target.value)} min={30000} required />
+            </div>
+            <div>
+              <label className={labelCls}>Timeout (ms, max 10000)</label>
+              <input className={inputCls} type="number" value={timeoutMs} onChange={e => setTimeoutMs(e.target.value)} min={1000} max={10000} required />
+            </div>
+            <div>
+              <label className={labelCls}>Failure Threshold</label>
+              <input className={inputCls} type="number" value={failureThreshold} onChange={e => setFailureThreshold(e.target.value)} min={1} max={20} required />
+            </div>
+            <div>
+              <label className={labelCls}>Success Threshold</label>
+              <input className={inputCls} type="number" value={successThreshold} onChange={e => setSuccessThreshold(e.target.value)} min={1} max={20} required />
+            </div>
+          </div>
+
+          {error && (
+            <div className="px-3 py-2 bg-[#FB4B4B]/10 border border-[#FB4B4B]/20 rounded text-xs font-mono text-[#FB4B4B]">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting || services.length === 0}
+            className="w-full py-2.5 rounded text-sm font-mono font-bold bg-[#4C8DFF] text-white hover:bg-[#3A78E8] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {submitting ? 'Creating…' : 'Create Target'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── My Targets Panel ─────────────────────────────────────────────────────────
+
+function MyTargetsPanel() {
+  const [targets, setTargets] = useState<UserTarget[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [revealKey, setRevealKey] = useState<string | null>(null);
+  const { teamId } = useAuth();
+
+  const load = async () => {
+    try {
+      const [tRes] = await Promise.all([
+        api.get('/monitoring/user-targets'),
+        Promise.resolve(), // placeholder for future parallel fetches
+      ]);
+      setTargets(tRes.data.targets);
+      // /services returns team services; we get them from teams endpoint
+      if (teamId) {
+        const svcs = await api.get(`/teams/${teamId}/services`).catch(() => ({ data: [] }));
+        setServices(Array.isArray(svcs.data) ? svcs.data : []);
+      }
+    } catch {
+      /* handled individually */
+    }
+  };
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggle = async (t: UserTarget) => {
+    await api.patch(`/monitoring/user-targets/${t.id}`, { isActive: !t.isActive });
+    load();
+  };
+
+  const remove = async (t: UserTarget) => {
+    if (!confirm(`Delete target "${t.name}"? This cannot be undone.`)) return;
+    await api.delete(`/monitoring/user-targets/${t.id}`);
+    load();
+  };
+
+  return (
+    <>
+      <div className="mt-10 border-t border-[#1A2230] pt-8">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-[0.2em] text-[#4C8DFF] mb-1">
+              My Monitor Targets
+            </div>
+            <p className="text-sm text-[#7C8BA3] font-mono">Manage the URLs this monitor tracks for you.</p>
+          </div>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono font-bold bg-[#4C8DFF]/10 text-[#4C8DFF] border border-[#4C8DFF]/30 hover:bg-[#4C8DFF]/20 transition-colors"
+          >
+            + Add Target
+          </button>
+        </div>
+
+        {targets.length === 0 ? (
+          <div className="p-8 text-center bg-[#0B0F17] rounded-lg border border-dashed border-[#1E2938]">
+            <p className="text-[#EAF0FA] font-medium text-sm">No targets yet</p>
+            <p className="text-xs text-[#7C8BA3] mt-2 font-mono">Click "Add Target" to register a URL for monitoring.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {targets.map(t => (
+              <div
+                key={t.id}
+                className={`flex items-center justify-between p-4 rounded-lg border transition-all ${t.isActive
+                  ? 'bg-[#0B0F17] border-[#1A2230]'
+                  : 'bg-[#080B11] border-[#1A2230] opacity-60'
+                  }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold text-sm text-[#EAF0FA]">{t.name}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest ring-1 ${t.isActive
+                      ? 'text-[#22D3A5] bg-[#22D3A5]/10 ring-[#22D3A5]/30'
+                      : 'text-[#7C8BA3] bg-[#7C8BA3]/10 ring-[#7C8BA3]/30'
+                      }`}>
+                      {t.isActive ? 'ACTIVE' : 'PAUSED'}
+                    </span>
+                  </div>
+                  <div className="text-xs font-mono text-[#7C8BA3] truncate">{t.url}</div>
+                  <div className="text-[10px] font-mono text-[#3A4658] mt-0.5">
+                    every {t.intervalMs / 1000}s · threshold {t.failureThreshold} failures
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 ml-4 shrink-0">
+                  <button
+                    onClick={() => toggle(t)}
+                    className="px-3 py-1.5 rounded text-[10px] font-mono font-bold border transition-all bg-[#1A2230] border-[#2A3546] text-[#7C8BA3] hover:text-[#EAF0FA] hover:border-[#3A4658]"
+                  >
+                    {t.isActive ? 'Pause' : 'Resume'}
+                  </button>
+                  <button
+                    onClick={() => remove(t)}
+                    className="px-3 py-1.5 rounded text-[10px] font-mono font-bold border transition-all bg-[#FB4B4B]/10 border-[#FB4B4B]/20 text-[#FB4B4B] hover:bg-[#FB4B4B]/20"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showAdd && (
+        <AddTargetModal
+          services={services}
+          onCreated={(key) => {
+            setShowAdd(false);
+            setRevealKey(key);
+            load();
+          }}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+
+      {revealKey && (
+        <ApiKeyRevealModal
+          apiKey={revealKey}
+          onClose={() => setRevealKey(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Main dashboard component ──────────────────────────────────────────────────
 
 export function MonitoringDashboard() {
   const [targets, setTargets] = useState<TargetStatus[]>([]);
@@ -230,7 +568,7 @@ export function MonitoringDashboard() {
               <div className="p-8 text-center bg-[#0B0F17] rounded-lg border border-dashed border-[#1E2938]">
                 <p className="text-[#EAF0FA] font-medium text-sm">No services connected yet</p>
                 <p className="text-xs text-[#7C8BA3] mt-2 font-mono">
-                  Add a target to targets.json and restart the monitor to start receiving signal.
+                  Add a target below to start receiving signal.
                 </p>
               </div>
             )}
@@ -272,7 +610,7 @@ export function MonitoringDashboard() {
                   ))}
                 </div>
 
-                {/* Latency oscilloscope */}
+                {/* Latency chart */}
                 <div className="bg-[#080B11] p-5 rounded-lg border border-[#1A2230]">
                   <div className="flex justify-between items-center mb-5">
                     <h3 className="text-xs font-mono uppercase tracking-widest text-[#7C8BA3]">
@@ -362,6 +700,9 @@ export function MonitoringDashboard() {
             )}
           </div>
         </div>
+
+        {/* My Targets management panel */}
+        <MyTargetsPanel />
       </div>
     </div>
   );

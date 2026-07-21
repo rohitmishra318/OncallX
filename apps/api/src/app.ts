@@ -7,6 +7,7 @@ import { servicesRouter } from './routes/services';
 import { teamsRouter } from './routes/teams';
 import { monitoringRouter } from './routes/monitoring';
 import { statusRouter } from './routes/status';
+import { internalRouter } from './routes/internal';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -22,6 +23,7 @@ app.use('/services', servicesRouter);
 app.use('/teams', teamsRouter);
 app.use('/monitoring', monitoringRouter);
 app.use('/status', statusRouter); // Public — no auth
+app.use('/internal', internalRouter); // Server-to-server — INTERNAL_MONITOR_KEY only
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -30,3 +32,4 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use(errorHandler);
 
 export default app;
+

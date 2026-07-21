@@ -53,6 +53,7 @@ services:
       SMTP_FROM: oncallx@local.dev
       PORT: 4000
       NODE_ENV: development
+      INTERNAL_MONITOR_KEY: ${INTERNAL_MONITOR_KEY:-dev_internal_monitor_key_change_in_production}
     depends_on:
       postgres:
         condition: service_healthy
@@ -72,11 +73,13 @@ services:
       SMTP_PORT: 1025
       SMTP_FROM: oncallx@local.dev
       NODE_ENV: development
+      INTERNAL_MONITOR_KEY: ${INTERNAL_MONITOR_KEY:-dev_internal_monitor_key_change_in_production}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
 
   web:
     build:

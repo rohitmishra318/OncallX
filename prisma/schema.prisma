@@ -19,7 +19,8 @@ model User {
   role         Role
   createdAt    DateTime @default(now())
 
-  team Team @relation(fields: [teamId], references: [id])
+  team           Team            @relation(fields: [teamId], references: [id])
+  monitorTargets MonitorTarget[]
 }
 
 enum Role {
@@ -82,6 +83,7 @@ model Service {
   team             Team              @relation(fields: [teamId], references: [id])
   escalationPolicy EscalationPolicy?
   incidents        Incident[]
+  monitorTargets   MonitorTarget[]
 }
 
 model EscalationPolicy {
@@ -146,4 +148,27 @@ model Notification {
   createdAt    DateTime @default(now())
 
   incident Incident @relation(fields: [incidentId], references: [id])
+}
+
+// ─── Phase 3: Dynamic Multi-Tenant Monitoring Targets ────────────────────────
+// Replaces targets.json as the source of truth for what URLs apps/monitor checks.
+// Each target belongs to a user and routes incidents through an existing Service.
+model MonitorTarget {
+  id                String   @id @default(uuid())
+  userId            String
+  serviceId         String   // incidents from this target use this Service's EscalationPolicy
+  name              String
+  url               String
+  expectedStatus    Int      @default(200)
+  timeoutMs         Int      @default(5000)
+  intervalMs        Int      @default(60000)
+  failureThreshold  Int      @default(3)
+  successThreshold  Int      @default(2)
+  degradedLatencyMs Int      @default(2000)
+  apiKeyHash        String   // bcrypt hash — raw key shown once at creation, never stored
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
 }
