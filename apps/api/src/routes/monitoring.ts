@@ -47,12 +47,14 @@ monitoringRouter.get(
     const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const since90d = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
-    const distinctTargets = await prisma.checkResult.groupBy({
-      by: ['targetId'],
+    const activeTargets = await prisma.monitorTarget.findMany({
+      where: { service: { teamId: req.user!.teamId } },
+      select: { name: true },
     });
+    const targetNames = activeTargets.map(t => t.name);
 
     const targets = await Promise.all(
-      distinctTargets.map(async ({ targetId }) => {
+      targetNames.map(async (targetId) => {
         const latest = await prisma.checkResult.findFirst({
           where: { targetId },
           orderBy: { timestamp: 'desc' },

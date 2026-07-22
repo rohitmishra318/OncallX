@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import {
+  Key, AlertCircle, Copy, Check, X, Plus, Pause, Play,
+  Trash2, Activity, Clock, ShieldAlert, ChevronDown, BarChart2
+} from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,7 +48,7 @@ interface Service {
 
 function Heartbeat({ status, size = 'md' }: { status: 'up' | 'down' | 'unknown'; size?: 'sm' | 'md' }) {
   const h = size === 'sm' ? 20 : 28;
-  const color = status === 'up' ? '#22D3A5' : status === 'down' ? '#FB4B4B' : '#7C8BA3';
+  const color = status === 'up' ? '#10B981' : status === 'down' ? '#E11D48' : '#64748B';
   const path =
     status === 'up'
       ? 'M0 14 H10 L14 4 L18 24 L22 14 H32 L36 8 L40 20 L44 14 H60'
@@ -53,7 +57,7 @@ function Heartbeat({ status, size = 'md' }: { status: 'up' | 'down' | 'unknown';
         : 'M0 14 H14 L18 10 L22 18 L26 14 H60';
 
   return (
-    <svg width={h * 2.15} height={h} viewBox="0 0 60 28" fill="none" className="overflow-visible">
+    <svg width={h * 2.15} height={h} viewBox="0 0 60 28" fill="none" className="overflow-visible shrink-0">
       <path
         d={path}
         stroke={color}
@@ -73,23 +77,23 @@ function Heartbeat({ status, size = 'md' }: { status: 'up' | 'down' | 'unknown';
 }
 
 const STATUS_META = {
-  up: { label: 'OPERATIONAL', text: 'text-[#22D3A5]', bg: 'bg-[#22D3A5]/10', ring: 'ring-[#22D3A5]/30' },
-  down: { label: 'DOWN', text: 'text-[#FB4B4B]', bg: 'bg-[#FB4B4B]/10', ring: 'ring-[#FB4B4B]/30' },
-  unknown: { label: 'UNKNOWN', text: 'text-[#7C8BA3]', bg: 'bg-[#7C8BA3]/10', ring: 'ring-[#7C8BA3]/30' },
+  up: { label: 'OPERATIONAL', text: 'text-emerald-400', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20' },
+  down: { label: 'DOWN', text: 'text-rose-400', bg: 'bg-rose-500/10', ring: 'ring-rose-500/20' },
+  unknown: { label: 'UNKNOWN', text: 'text-slate-400', bg: 'bg-slate-500/10', ring: 'ring-slate-500/20' },
 } as const;
 
 function uptimeColor(val: number | null) {
-  if (val === null) return 'text-[#7C8BA3]';
-  if (val >= 99.9) return 'text-[#22D3A5]';
-  if (val >= 95) return 'text-[#FBBF24]';
-  return 'text-[#FB4B4B]';
+  if (val === null) return 'text-slate-500';
+  if (val >= 99.9) return 'text-emerald-400';
+  if (val >= 95) return 'text-amber-400';
+  return 'text-rose-400';
 }
 
 function stripColor(val: number | null) {
-  if (val === null) return 'bg-[#1E2938]';
-  if (val >= 99.9) return 'bg-[#22D3A5]';
-  if (val >= 95) return 'bg-[#FBBF24]';
-  return 'bg-[#FB4B4B]';
+  if (val === null) return 'bg-slate-800';
+  if (val >= 99.9) return 'bg-emerald-500';
+  if (val >= 95) return 'bg-amber-500';
+  return 'bg-rose-500';
 }
 
 function relativeTime(iso: string | null) {
@@ -113,40 +117,47 @@ function ApiKeyRevealModal({ apiKey, onClose }: { apiKey: string; onClose: () =>
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-lg mx-4 bg-[#0B0F17] border border-[#1E2938] rounded-xl p-7 shadow-2xl">
-        <div className="flex items-center gap-3 mb-1">
-          <span className="text-2xl">🔑</span>
-          <h2 className="text-lg font-bold text-[#F5F8FF]">Save Your API Key</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+      <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-blue-500/10 text-blue-400 rounded-lg">
+            <Key size={20} />
+          </div>
+          <h2 className="text-lg font-semibold text-white">Save Your API Key</h2>
         </div>
-        <p className="text-[#FB4B4B] text-xs font-mono mt-2 mb-5 bg-[#FB4B4B]/10 border border-[#FB4B4B]/20 rounded px-3 py-2">
-          ⚠️ This key will NOT be shown again. Copy it now and store it securely.
-        </p>
 
-        <div className="flex items-center gap-2 mb-6">
-          <code className="flex-1 font-mono text-sm bg-[#080B11] border border-[#1A2230] rounded px-3 py-2.5 text-[#4C8DFF] break-all select-all">
+        <div className="flex items-start gap-3 mt-4 mb-6 bg-rose-500/10 border border-rose-500/20 rounded-lg p-3">
+          <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+          <p className="text-rose-400 text-sm leading-relaxed">
+            This key will <strong>NOT</strong> be shown again. Copy it now and store it securely.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
+          <code className="flex-1 font-mono text-sm bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-blue-400 break-all select-all">
             {apiKey}
           </code>
           <button
             onClick={copy}
-            className={`shrink-0 px-4 py-2.5 rounded text-xs font-mono font-bold tracking-wide transition-all ${copied
-              ? 'bg-[#22D3A5]/20 text-[#22D3A5] border border-[#22D3A5]/30'
-              : 'bg-[#4C8DFF]/10 text-[#4C8DFF] border border-[#4C8DFF]/30 hover:bg-[#4C8DFF]/20'
+            className={`shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-lg text-sm font-medium transition-all ${copied
+              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              : 'bg-blue-600 text-white hover:bg-blue-700 border border-transparent'
               }`}
           >
-            {copied ? 'COPIED!' : 'COPY'}
+            {copied ? <Check size={16} /> : <Copy size={16} />}
+            {copied ? 'Copied!' : 'Copy'}
           </button>
         </div>
 
-        <p className="text-xs text-[#7C8BA3] font-mono mb-5">
-          This key lets external tools (e.g. UptimeRobot, DigitalOcean) POST alerts to OnCallX on behalf of this target's service. The built-in monitor doesn't use it — it authenticates internally.
+        <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+          This key lets external tools (e.g. UptimeRobot, DigitalOcean) POST alerts to OnCallX on behalf of this target's service. The built-in monitor authenticates internally.
         </p>
 
         <button
           onClick={onClose}
-          className="w-full py-2.5 rounded text-sm font-mono font-semibold bg-[#1A2230] text-[#EAF0FA] hover:bg-[#2A3546] transition-colors"
+          className="w-full py-2.5 rounded-lg text-sm font-medium border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
         >
-          I've saved it — close
+          I've saved it, close window
         </button>
       </div>
     </div>
@@ -155,15 +166,7 @@ function ApiKeyRevealModal({ apiKey, onClose }: { apiKey: string; onClose: () =>
 
 // ─── Add Target Modal ─────────────────────────────────────────────────────────
 
-function AddTargetModal({
-  services,
-  onCreated,
-  onClose,
-}: {
-  services: Service[];
-  onCreated: (apiKey: string) => void;
-  onClose: () => void;
-}) {
+function AddTargetModal({ services, onCreated, onClose }: { services: Service[]; onCreated: (apiKey: string) => void; onClose: () => void; }) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [serviceId, setServiceId] = useState('');
@@ -200,85 +203,95 @@ function AddTargetModal({
     }
   }
 
-  const inputCls =
-    'w-full bg-[#080B11] border border-[#1A2230] text-[#EAF0FA] text-sm font-mono rounded px-3 py-2 outline-none focus:border-[#4C8DFF]/50 placeholder-[#3A4658]';
-  const labelCls = 'block text-[10px] font-mono uppercase tracking-widest text-[#7C8BA3] mb-1';
+  const inputCls = 'w-full bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 placeholder-slate-600 transition-all';
+  const labelCls = 'block text-xs font-medium text-slate-400 mb-1.5';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-lg mx-4 bg-[#0B0F17] border border-[#1E2938] rounded-xl p-7 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-[#F5F8FF]">Add Monitor Target</h2>
-          <button onClick={onClose} className="text-[#7C8BA3] hover:text-[#EAF0FA] text-xl leading-none">✕</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+      <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
+          <h2 className="text-lg font-semibold text-white">Add Monitori Target</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">
+            <X size={20} />
+          </button>
         </div>
 
         {services.length === 0 && (
-          <div className="mb-5 px-3 py-3 bg-[#FBBF24]/10 border border-[#FBBF24]/30 rounded text-xs font-mono text-[#FBBF24]">
-            ⚠️ You have no Services yet. Go to the Admin Panel to create one with an escalation policy first.
+          <div className="flex items-start gap-3 mb-6 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-sm text-amber-500">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <p>You have no Services yet. Go to the Admin Panel to create one with an escalation policy first.</p>
           </div>
         )}
 
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label className={labelCls}>Target Name</label>
-            <input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="my-production-api" required />
-          </div>
-          <div>
-            <label className={labelCls}>URL to monitor</label>
-            <input className={inputCls} type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://your-app.com/health" required />
-            <p className="text-[10px] font-mono text-[#3A4658] mt-1">Must be public HTTPS. Private IPs and metadata endpoints are blocked.</p>
-          </div>
-          <div>
-            <label className={labelCls}>Service (incidents route here)</label>
-            <select
-              className={inputCls}
-              value={serviceId}
-              onChange={e => setServiceId(e.target.value)}
-              required
-            >
-              <option value="">— Select a service —</option>
-              {services.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+        <form onSubmit={submit} className="space-y-5">
+          <div className="space-y-4">
+            <div>
+              <label className={labelCls}>Target Name</label>
+              <input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Production API" required />
+            </div>
+            <div>
+              <label className={labelCls}>URL to monitor</label>
+              <input className={inputCls} type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://api.example.com/health" required />
+              <p className="text-xs text-slate-500 mt-1.5">Must be public HTTPS. Private IPs and metadata endpoints are blocked.</p>
+            </div>
+            <div>
+              <label className={labelCls}>Service Routing</label>
+              <select className={inputCls} value={serviceId} onChange={e => setServiceId(e.target.value)} required>
+                <option value="" disabled>— Select a service —</option>
+                {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Expected Status</label>
-              <input className={inputCls} type="number" value={expectedStatus} onChange={e => setExpectedStatus(e.target.value)} min={100} max={599} required />
-            </div>
-            <div>
-              <label className={labelCls}>Interval (ms, min 30000)</label>
-              <input className={inputCls} type="number" value={intervalMs} onChange={e => setIntervalMs(e.target.value)} min={30000} required />
-            </div>
-            <div>
-              <label className={labelCls}>Timeout (ms, max 10000)</label>
-              <input className={inputCls} type="number" value={timeoutMs} onChange={e => setTimeoutMs(e.target.value)} min={1000} max={10000} required />
-            </div>
-            <div>
-              <label className={labelCls}>Failure Threshold</label>
-              <input className={inputCls} type="number" value={failureThreshold} onChange={e => setFailureThreshold(e.target.value)} min={1} max={20} required />
-            </div>
-            <div>
-              <label className={labelCls}>Success Threshold</label>
-              <input className={inputCls} type="number" value={successThreshold} onChange={e => setSuccessThreshold(e.target.value)} min={1} max={20} required />
+          <div className="pt-4 border-t border-slate-800">
+            <h3 className="text-sm font-medium text-white mb-4">Advanced Configuration</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Expected Status</label>
+                <input className={inputCls} type="number" value={expectedStatus} onChange={e => setExpectedStatus(e.target.value)} min={100} max={599} required />
+              </div>
+              <div>
+                <label className={labelCls}>Interval (ms)</label>
+                <input className={inputCls} type="number" value={intervalMs} onChange={e => setIntervalMs(e.target.value)} min={30000} required />
+              </div>
+              <div>
+                <label className={labelCls}>Timeout (ms)</label>
+                <input className={inputCls} type="number" value={timeoutMs} onChange={e => setTimeoutMs(e.target.value)} min={1000} max={10000} required />
+              </div>
+              <div>
+                <label className={labelCls}>Failure Threshold</label>
+                <input className={inputCls} type="number" value={failureThreshold} onChange={e => setFailureThreshold(e.target.value)} min={1} max={20} required />
+              </div>
+              <div>
+                <label className={labelCls}>Success Threshold</label>
+                <input className={inputCls} type="number" value={successThreshold} onChange={e => setSuccessThreshold(e.target.value)} min={1} max={20} required />
+              </div>
             </div>
           </div>
 
           {error && (
-            <div className="px-3 py-2 bg-[#FB4B4B]/10 border border-[#FB4B4B]/20 rounded text-xs font-mono text-[#FB4B4B]">
-              {error}
+            <div className="flex items-start gap-2 px-3 py-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-sm text-rose-400">
+              <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+              <p>{error}</p>
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={submitting || services.length === 0}
-            className="w-full py-2.5 rounded text-sm font-mono font-bold bg-[#4C8DFF] text-white hover:bg-[#3A78E8] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting ? 'Creating…' : 'Create Target'}
-          </button>
+          <div className="pt-4 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || services.length === 0}
+              className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {submitting ? 'Creating...' : 'Create Target'}
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -298,16 +311,15 @@ function MyTargetsPanel() {
     try {
       const [tRes] = await Promise.all([
         api.get('/monitoring/user-targets'),
-        Promise.resolve(), // placeholder for future parallel fetches
+        Promise.resolve(),
       ]);
       setTargets(tRes.data.targets);
-      // /services returns team services; we get them from teams endpoint
       if (teamId) {
         const svcs = await api.get(`/teams/${teamId}/services`).catch(() => ({ data: [] }));
         setServices(Array.isArray(svcs.data) ? svcs.data : []);
       }
     } catch {
-      /* handled individually */
+      // Handle error quietly
     }
   };
 
@@ -326,69 +338,83 @@ function MyTargetsPanel() {
 
   return (
     <>
-      <div className="mt-10 border-t border-[#1A2230] pt-8">
-        <div className="flex items-center justify-between mb-5">
+      <div className="mt-12">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
           <div>
-            <div className="text-xs font-mono uppercase tracking-[0.2em] text-[#4C8DFF] mb-1">
-              My Monitor Targets
-            </div>
-            <p className="text-sm text-[#7C8BA3] font-mono">Manage the URLs this monitor tracks for you.</p>
+            <h2 className="text-lg font-semibold text-white">Configured Monitor</h2>
+            <p className="text-sm text-slate-400 mt-1">Manage external URLs your team is currently tracking.</p>
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono font-bold bg-[#4C8DFF]/10 text-[#4C8DFF] border border-[#4C8DFF]/30 hover:bg-[#4C8DFF]/20 transition-colors"
+            className="flex items-center shrink-0 gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
           >
-            + Add Target
+            <Plus size={16} />
+            Add Target
           </button>
         </div>
 
         {targets.length === 0 ? (
-          <div className="p-8 text-center bg-[#0B0F17] rounded-lg border border-dashed border-[#1E2938]">
-            <p className="text-[#EAF0FA] font-medium text-sm">No targets yet</p>
-            <p className="text-xs text-[#7C8BA3] mt-2 font-mono">Click "Add Target" to register a URL for monitoring.</p>
+          <div className="flex flex-col items-center justify-center p-12 bg-slate-900 rounded-xl border border-dashed border-slate-800">
+            <Activity className="w-10 h-10 text-slate-600 mb-4" />
+            <p className="text-slate-200 font-medium text-sm">No monitors configured</p>
+            <p className="text-sm text-slate-400 mt-1">Click "Add Target" to start tracking endpoints.</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {targets.map(t => (
-              <div
-                key={t.id}
-                className={`flex items-center justify-between p-4 rounded-lg border transition-all ${t.isActive
-                  ? 'bg-[#0B0F17] border-[#1A2230]'
-                  : 'bg-[#080B11] border-[#1A2230] opacity-60'
-                  }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-semibold text-sm text-[#EAF0FA]">{t.name}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-widest ring-1 ${t.isActive
-                      ? 'text-[#22D3A5] bg-[#22D3A5]/10 ring-[#22D3A5]/30'
-                      : 'text-[#7C8BA3] bg-[#7C8BA3]/10 ring-[#7C8BA3]/30'
-                      }`}>
-                      {t.isActive ? 'ACTIVE' : 'PAUSED'}
-                    </span>
+          <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+            <div className="divide-y divide-slate-800/60">
+              {targets.map(t => (
+                <div
+                  key={t.id}
+                  className={`flex flex-col md:flex-row md:items-center justify-between p-4 transition-all hover:bg-slate-800/30 ${!t.isActive ? 'opacity-75 bg-slate-900/50' : ''
+                    }`}
+                >
+                  <div className="min-w-0 flex-1 mb-4 md:mb-0">
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="font-semibold text-sm text-white">{t.name}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium tracking-wider ring-1 ${t.isActive
+                          ? 'text-emerald-400 bg-emerald-500/10 ring-emerald-500/20'
+                          : 'text-slate-400 bg-slate-500/10 ring-slate-500/20'
+                          }`}
+                      >
+                        {t.isActive ? 'ACTIVE' : 'PAUSED'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm font-mono text-slate-400 truncate mb-1">
+                      {t.url}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} /> every {t.intervalMs / 1000}s
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <AlertCircle size={12} /> thres: {t.failureThreshold}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-xs font-mono text-[#7C8BA3] truncate">{t.url}</div>
-                  <div className="text-[10px] font-mono text-[#3A4658] mt-0.5">
-                    every {t.intervalMs / 1000}s · threshold {t.failureThreshold} failures
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-2 ml-4 shrink-0">
-                  <button
-                    onClick={() => toggle(t)}
-                    className="px-3 py-1.5 rounded text-[10px] font-mono font-bold border transition-all bg-[#1A2230] border-[#2A3546] text-[#7C8BA3] hover:text-[#EAF0FA] hover:border-[#3A4658]"
-                  >
-                    {t.isActive ? 'Pause' : 'Resume'}
-                  </button>
-                  <button
-                    onClick={() => remove(t)}
-                    className="px-3 py-1.5 rounded text-[10px] font-mono font-bold border transition-all bg-[#FB4B4B]/10 border-[#FB4B4B]/20 text-[#FB4B4B] hover:bg-[#FB4B4B]/20"
-                  >
-                    Delete
-                  </button>
+                  <div className="flex items-center gap-2 md:ml-4 shrink-0">
+                    <button
+                      onClick={() => toggle(t)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all border ${t.isActive
+                        ? 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
+                        : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'
+                        }`}
+                    >
+                      {t.isActive ? <Pause size={14} /> : <Play size={14} />}
+                      {t.isActive ? 'Pause' : 'Resume'}
+                    </button>
+                    <button
+                      onClick={() => remove(t)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border bg-transparent border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/30 hover:bg-rose-500/10 transition-all"
+                    >
+                      <Trash2 size={14} />
+                      Delete
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -406,10 +432,7 @@ function MyTargetsPanel() {
       )}
 
       {revealKey && (
-        <ApiKeyRevealModal
-          apiKey={revealKey}
-          onClose={() => setRevealKey(null)}
-        />
+        <ApiKeyRevealModal apiKey={revealKey} onClose={() => setRevealKey(null)} />
       )}
     </>
   );
@@ -469,59 +492,57 @@ export function MonitoringDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#080B11] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
           <Heartbeat status="unknown" />
-          <p className="text-[#7C8BA3] text-sm font-mono tracking-wide">reading signal…</p>
+          <p className="text-slate-500 text-sm font-mono tracking-wide animate-pulse">Establishing connection...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#080B11] text-[#EAF0FA]">
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-blue-500/30">
       <style>{`
         @keyframes hb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
-        @keyframes live-dot { 0%, 100% { box-shadow: 0 0 0 0 rgba(76,141,255,0.5); } 50% { box-shadow: 0 0 0 5px rgba(76,141,255,0); } }
       `}</style>
 
-      <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-10 gap-4 border-b border-[#1A2230] pb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 gap-4 border-b border-slate-800 pb-6">
           <div>
-            <div className="text-xs font-mono uppercase tracking-[0.2em] text-[#4C8DFF] mb-2">
-              Monitoring / System Overview
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight text-[#F5F8FF]">Signal Board</h1>
-            <p className="mt-2 text-sm text-[#7C8BA3] font-mono">
-              {targets.length} services tracked · <span className="text-[#22D3A5]">{upCount} operational</span>
+            <h1 className="text-2xl font-bold tracking-tight text-white mb-1">Signal Board</h1>
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <span className="font-medium text-slate-300">{targets.length} services</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-emerald-400 font-medium">{upCount} operational</span>
               {downCount > 0 && (
                 <>
-                  {' '}
-                  · <span className="text-[#FB4B4B]">{downCount} down</span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-rose-400 font-medium">{downCount} down</span>
                 </>
               )}
-            </p>
+            </div>
           </div>
 
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`flex items-center gap-2.5 px-4 py-2 rounded-full text-xs font-mono font-medium tracking-wide transition-all border ${autoRefresh
-              ? 'bg-[#4C8DFF]/10 text-[#4C8DFF] border-[#4C8DFF]/30'
-              : 'bg-transparent text-[#7C8BA3] border-[#1E2938] hover:border-[#2A3546]'
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all border ${autoRefresh
+              ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20'
+              : 'bg-transparent text-slate-400 border-slate-700 hover:text-slate-300 hover:border-slate-600'
               }`}
           >
-            <span
-              className="w-2 h-2 rounded-full bg-[#4C8DFF]"
-              style={autoRefresh ? { animation: 'live-dot 1.8s ease-in-out infinite' } : undefined}
-            />
-            {autoRefresh ? 'LIVE · 30s' : 'PAUSED'}
+            <span className="relative flex h-2 w-2">
+              {autoRefresh && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${autoRefresh ? 'bg-blue-500' : 'bg-slate-500'}`}></span>
+            </span>
+            {autoRefresh ? 'LIVE (30s)' : 'PAUSED'}
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {/* Signal list */}
-          <div className="space-y-3 lg:col-span-1">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Signal list (Left Column) */}
+          <div className="flex flex-col gap-3 lg:col-span-4 h-full lg:max-h-[800px] lg:overflow-y-auto pr-1 custom-scrollbar">
             {targets.map((target) => {
               const isSelected = selectedTarget?.targetId === target.targetId;
               const meta = STATUS_META[target.status];
@@ -529,33 +550,40 @@ export function MonitoringDashboard() {
                 <div
                   key={target.targetId}
                   onClick={() => setSelectedTarget(target)}
-                  className={`p-4 rounded-lg cursor-pointer transition-all border ${isSelected
-                    ? 'bg-[#0F1520] border-[#4C8DFF]/50 shadow-[0_0_0_1px_rgba(76,141,255,0.15)]'
-                    : 'bg-[#0B0F17] border-[#1A2230] hover:border-[#2A3546]'
+                  className={`p-4 rounded-xl cursor-pointer transition-all border relative overflow-hidden ${isSelected
+                    ? 'bg-slate-900 border-slate-700 shadow-sm'
+                    : 'bg-slate-900/40 border-transparent hover:border-slate-800 hover:bg-slate-900/80'
                     }`}
                 >
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="font-semibold text-[15px] text-[#EAF0FA] truncate pr-2">{target.targetId}</span>
-                    <span
-                      className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-wider ring-1 ${meta.text} ${meta.bg} ${meta.ring}`}
-                    >
+                  {isSelected && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-xl" />
+                  )}
+
+                  <div className="flex justify-between items-start mb-3 ml-1">
+                    <span className="font-semibold text-sm text-white truncate pr-2">{target.targetId}</span>
+                    <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-mono font-medium tracking-wider ring-1 ${meta.text} ${meta.bg} ${meta.ring}`}>
                       {meta.label}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between mt-2 mb-3">
+                  <div className="flex items-center justify-between mb-4 ml-1">
                     <Heartbeat status={target.status} size="sm" />
-                    <div className="text-right font-mono text-xs text-[#7C8BA3]">
-                      <div>{target.latencyMs !== null ? `${target.latencyMs}ms` : '—'}</div>
-                      <div className="text-[10px] mt-0.5">{relativeTime(target.lastCheckedAt)}</div>
+                    <div className="text-right flex flex-col items-end">
+                      <span className="font-mono text-sm font-medium text-slate-300">
+                        {target.latencyMs !== null ? `${target.latencyMs}ms` : '—'}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        {relativeTime(target.lastCheckedAt)}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex gap-[3px] h-6">
+                  {/* Uptime Strip */}
+                  <div className="flex gap-0.5 h-1.5 w-full rounded-sm overflow-hidden bg-slate-800/50 ml-1">
                     {target.uptimeStrip.map((day, idx) => (
                       <div
                         key={idx}
-                        className={`flex-1 rounded-[2px] ${stripColor(day.uptimePercent)} opacity-80 hover:opacity-100 transition-opacity`}
+                        className={`flex-1 ${stripColor(day.uptimePercent)} opacity-80 hover:opacity-100 transition-opacity`}
                         title={`${day.date}: ${day.uptimePercent === null ? 'no data' : day.uptimePercent.toFixed(2) + '%'}`}
                       />
                     ))}
@@ -565,137 +593,156 @@ export function MonitoringDashboard() {
             })}
 
             {targets.length === 0 && (
-              <div className="p-8 text-center bg-[#0B0F17] rounded-lg border border-dashed border-[#1E2938]">
-                <p className="text-[#EAF0FA] font-medium text-sm">No services connected yet</p>
-                <p className="text-xs text-[#7C8BA3] mt-2 font-mono">
-                  Add a target below to start receiving signal.
-                </p>
+              <div className="p-8 text-center bg-slate-900 rounded-xl border border-dashed border-slate-800">
+                <p className="text-white font-medium text-sm">No services connected</p>
+                <p className="text-xs text-slate-400 mt-1">Add a target below to start receiving signals.</p>
               </div>
             )}
           </div>
 
-          {/* Detail panel */}
-          <div className="lg:col-span-2">
+          {/* Detail panel (Right Column) */}
+          <div className="lg:col-span-8">
             {selectedTarget ? (
-              <div className="bg-[#0B0F17] rounded-xl p-6 md:p-7 border border-[#1A2230]">
-                <div className="flex items-center justify-between mb-7">
-                  <div className="flex items-center gap-3">
-                    <Heartbeat status={selectedTarget.status} />
-                    <h2 className="text-xl font-bold text-[#F5F8FF]">{selectedTarget.targetId}</h2>
-                  </div>
-                  <span
-                    className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold tracking-wider ring-1 ${STATUS_META[selectedTarget.status].text
-                      } ${STATUS_META[selectedTarget.status].bg} ${STATUS_META[selectedTarget.status].ring}`}
-                  >
-                    {STATUS_META[selectedTarget.status].label}
-                  </span>
-                </div>
-
-                {/* KPI row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-                  {[
-                    { label: '24h', value: selectedTarget.uptime.h24 },
-                    { label: '7d', value: selectedTarget.uptime.d7 },
-                    { label: '30d', value: selectedTarget.uptime.d30 },
-                    { label: '90d', value: selectedTarget.uptime.d90 },
-                  ].map((stat) => (
-                    <div key={stat.label} className="p-4 bg-[#080B11] rounded-lg border border-[#1A2230]">
-                      <div className="text-[10px] font-mono uppercase tracking-widest text-[#7C8BA3] mb-2">
-                        {stat.label} uptime
-                      </div>
-                      <div className={`text-2xl font-bold font-mono ${uptimeColor(stat.value)}`}>
-                        {stat.value === null ? '—' : `${stat.value.toFixed(2)}%`}
+              <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-sm overflow-hidden">
+                <div className="p-6 md:p-8">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                    <div className="flex items-center gap-4">
+                      <Heartbeat status={selectedTarget.status} />
+                      <div>
+                        <h2 className="text-xl md:text-2xl font-bold text-white truncate leading-none mb-2">
+                          {selectedTarget.targetId}
+                        </h2>
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-2 w-2 relative">
+                            {selectedTarget.status === 'up' && (
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            )}
+                            <span className={`relative inline-flex rounded-full h-2 w-2 ${selectedTarget.status === 'up' ? 'bg-emerald-500' : selectedTarget.status === 'down' ? 'bg-rose-500' : 'bg-slate-500'
+                              }`}></span>
+                          </span>
+                          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                            {selectedTarget.status === 'up' ? 'Monitoring Active' : 'Service Outage'}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                {/* Latency chart */}
-                <div className="bg-[#080B11] p-5 rounded-lg border border-[#1A2230]">
-                  <div className="flex justify-between items-center mb-5">
-                    <h3 className="text-xs font-mono uppercase tracking-widest text-[#7C8BA3]">
-                      Response Latency
-                    </h3>
-                    <select
-                      value={historyRange}
-                      onChange={(e) => setHistoryRange(e.target.value as any)}
-                      className="bg-[#0B0F17] border border-[#1E2938] text-[#EAF0FA] text-xs font-mono rounded px-3 py-1.5 outline-none cursor-pointer hover:border-[#2A3546] focus:border-[#4C8DFF]/50"
-                    >
-                      <option value="24h">24 hours</option>
-                      <option value="7d">7 days</option>
-                      <option value="30d">30 days</option>
-                      <option value="90d">90 days</option>
-                    </select>
                   </div>
 
-                  <div className="h-64 w-full">
-                    {history?.data.length ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={history.data} margin={{ top: 5, right: 5, left: -10, bottom: 5 }}>
-                          <CartesianGrid stroke="#151C28" strokeDasharray="3 3" vertical={false} />
-                          <XAxis
-                            dataKey={history.resolution === 'raw' ? 'timestamp' : 'hourBucket'}
-                            tickFormatter={(val: any) =>
-                              new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                            }
-                            minTickGap={40}
-                            stroke="#3A4658"
-                            fontSize={11}
-                            fontFamily="ui-monospace, monospace"
-                            tickLine={false}
-                            axisLine={{ stroke: '#1A2230' }}
-                          />
-                          <YAxis
-                            stroke="#3A4658"
-                            fontSize={11}
-                            fontFamily="ui-monospace, monospace"
-                            tickLine={false}
-                            axisLine={false}
-                            tickFormatter={(val) => `${val}ms`}
-                            width={54}
-                          />
-                          <Tooltip
-                            contentStyle={{
-                              backgroundColor: '#0B0F17',
-                              border: '1px solid #1E2938',
-                              borderRadius: '6px',
-                              fontFamily: 'ui-monospace, monospace',
-                              fontSize: '12px',
-                            }}
-                            labelStyle={{ color: '#7C8BA3' }}
-                            itemStyle={{ color: '#4C8DFF', fontWeight: 600 }}
-                            labelFormatter={(val: any) =>
-                              new Date(val).toLocaleString(undefined, {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })
-                            }
-                            formatter={(val) => [`${val} ms`, 'latency']}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey={history.resolution === 'raw' ? 'latencyMs' : 'avgLatencyMs'}
-                            stroke="#4C8DFF"
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={{ r: 4, fill: '#4C8DFF', stroke: '#080B11', strokeWidth: 2 }}
-                            style={{ filter: 'drop-shadow(0 0 4px rgba(76,141,255,0.5))' }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-[#3A4658]">
-                        <p className="font-mono text-sm">no data in this range</p>
+                  {/* KPI Row */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    {[
+                      { label: '24h', value: selectedTarget.uptime.h24 },
+                      { label: '7d', value: selectedTarget.uptime.d7 },
+                      { label: '30d', value: selectedTarget.uptime.d30 },
+                      { label: '90d', value: selectedTarget.uptime.d90 },
+                    ].map((stat) => (
+                      <div key={stat.label} className="p-5 bg-slate-950/50 rounded-xl border border-slate-800/60 flex flex-col justify-center">
+                        <div className="text-xs font-medium text-slate-400 mb-1">
+                          {stat.label} Uptime
+                        </div>
+                        <div className={`text-2xl font-semibold font-mono tracking-tight ${uptimeColor(stat.value)}`}>
+                          {stat.value === null ? '—' : `${stat.value.toFixed(2)}%`}
+                        </div>
                       </div>
-                    )}
+                    ))}
+                  </div>
+
+                  {/* Latency chart */}
+                  <div className="bg-slate-950 rounded-xl border border-slate-800/60 p-1">
+                    <div className="p-4 md:p-5 flex justify-between items-center border-b border-slate-800/60">
+                      <div className="flex items-center gap-2 text-sm font-medium text-white">
+                        <BarChart2 size={16} className="text-slate-400" />
+                        Response Latency
+                      </div>
+                      <div className="relative">
+                        <select
+                          value={historyRange}
+                          onChange={(e) => setHistoryRange(e.target.value as any)}
+                          className="appearance-none bg-slate-900 border border-slate-700 text-slate-200 text-xs font-medium rounded-md pl-3 pr-8 py-1.5 outline-none cursor-pointer hover:border-slate-600 focus:ring-2 focus:ring-blue-500/50 transition-all"
+                        >
+                          <option value="24h">Last 24 hours</option>
+                          <option value="7d">Last 7 days</option>
+                          <option value="30d">Last 30 days</option>
+                          <option value="90d">Last 90 days</option>
+                        </select>
+                        <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div className="h-64 w-full p-4">
+                      {history?.data.length ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={history.data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                            <CartesianGrid stroke="#1E293B" strokeDasharray="4 4" vertical={false} />
+                            <XAxis
+                              dataKey={history.resolution === 'raw' ? 'timestamp' : 'hourBucket'}
+                              tickFormatter={(val: any) =>
+                                new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              }
+                              minTickGap={40}
+                              stroke="#475569"
+                              fontSize={11}
+                              fontFamily="ui-monospace, monospace"
+                              tickLine={false}
+                              axisLine={false}
+                              dy={10}
+                            />
+                            <YAxis
+                              stroke="#475569"
+                              fontSize={11}
+                              fontFamily="ui-monospace, monospace"
+                              tickLine={false}
+                              axisLine={false}
+                              tickFormatter={(val) => `${val}ms`}
+                              width={60}
+                              dx={-10}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#0F172A',
+                                border: '1px solid #1E293B',
+                                borderRadius: '8px',
+                                fontFamily: 'ui-monospace, monospace',
+                                fontSize: '12px',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                              }}
+                              labelStyle={{ color: '#94A3B8', marginBottom: '6px', fontWeight: 500 }}
+                              itemStyle={{ color: '#60A5FA', fontWeight: 600 }}
+                              labelFormatter={(val: any) =>
+                                new Date(val).toLocaleString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              }
+                              formatter={(val) => [`${val} ms`, 'Latency']}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey={history.resolution === 'raw' ? 'latencyMs' : 'avgLatencyMs'}
+                              stroke="#3B82F6"
+                              strokeWidth={2}
+                              dot={false}
+                              activeDot={{ r: 4, fill: '#3B82F6', stroke: '#0F172A', strokeWidth: 2 }}
+                              style={{ filter: 'drop-shadow(0 0 6px rgba(59,130,246,0.2))' }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-500">
+                          <Activity className="w-8 h-8 mb-2 opacity-20" />
+                          <p className="text-sm font-medium">No latency data available</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="h-full min-h-[400px] flex flex-col items-center justify-center bg-[#0B0F17] rounded-xl border border-dashed border-[#1A2230]">
-                <p className="text-[#7C8BA3] font-mono text-sm">select a service to view metrics</p>
+              <div className="h-full min-h-[400px] flex flex-col items-center justify-center bg-slate-900 rounded-xl border border-slate-800">
+                <Activity className="w-10 h-10 text-slate-700 mb-4" />
+                <p className="text-slate-400 font-medium text-sm">Select a service to view details</p>
               </div>
             )}
           </div>
@@ -704,6 +751,22 @@ export function MonitoringDashboard() {
         {/* My Targets management panel */}
         <MyTargetsPanel />
       </div>
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #334155;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #475569;
+        }
+      `}</style>
     </div>
   );
 }
